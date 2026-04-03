@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Mini GD PRO</title>
+<style>
+  body { margin:0; overflow:hidden; background:black; font-family:Arial;}
+  canvas { display:block; margin:auto;}
+</style>
+</head>
+<body>
+
+<canvas id="game" width="800" height="300"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let state = "menu";
+let level = 0;
+
+let cube, obstacles=[], frame, gameOver, levelComplete;
+let buttons=[], selectedSkin=0, bgParticles=[];
+
+const levels = [
+  { duration:800, speed:5 },
+  { duration:1000, speed:6 },
+  { duration:1300, speed:7 }
+];
+
+const skins = [
+  {type:"color", value:"cyan"},
+  {type:"color", value:"lime"},
+  {type:"color", value:"yellow"},
+  {type:"color", value:"magenta"},
+  {type:"gradient"}
+];
+
+function createBackground(){
+  bgParticles=[];
+  for(let i=0;i<40;i++){
+    bgParticles.push({
+      x:Math.random()*800,
+      y:Math.random()*300,
+      size:Math.random()*4+2,
+      speed:Math.random()*1+0.5
+    });
+  }
+}
+createBackground();
+
+function startLevel(lv){
+  level=lv;
+  cube={x:100,y:200,size:30,velocity:0,gravity:0.7,jump:-13,onGround:true};
+  obstacles=[]; frame=0; gameOver=false; levelComplete=false;
+}
+
+function drawCube(){
+  let s=skins[selectedSkin];
+  if(s.type==="color"){
+    ctx.fillStyle=s.value;
+  } else {
+    let g=ctx.createLinearGradient(cube.x,cube.y,cube.x+30,cube.y+30);
+    g.addColorStop(0,"cyan");
+    g.addColorStop(1,"magenta");
+    ctx.fillStyle=g;
+  }
+  ctx.fillRect(cube.x,cube.y,30,30);
+}
+
+canvas.addEventListener("mousedown",(e)=>{
+  const r=canvas.getBoundingClientRect();
+  let mx=e.clientX-r.left, my=e.clientY-r.top;
+  let clicked=false;
+
+  buttons.forEach(b=>{
+    if(mx>b.x && mx<b.x+b.w && my>b.y && my<b.y+b.h){
+      b.action(); clicked=true;
+    }
+  });
+
+  if(state==="game" && !clicked){
+    if(gameOver) startLevel(level);
+    else if(levelComplete) state="levels";
+    else if(cube.onGround){
+      cube.velocity=cube.jump;
+      cube.onGround=false;
+    }
+  }
+});
+
+document.addEventListener("keydown",()=>{
+  if(state==="game"){
+    if(gameOver) startLevel(level);
+    else if(levelComplete) state="levels";
+    else if(cube.onGround){
+      cube.velocity=cube.jump;
+      cube.onGround=false;
+    }
+  }
+});
+
+function spawnObstacle(){
+  obstacles.push({x:800,y:210,width:20,height:50});
+}
+
+function collision(a,b){
+  return a.x<b.x+b.width &&
+         a.x+30>b.x &&
+         a.y<b.y+b.height &&
+         a.y+30>b.y;
+}
+
+function update(){
+  bgParticles.forEach(p=>{
+    p.x-=p.speed;
+    if(p.x<0){p.x=800;p.y=Math.random()*300;}
+  });
+
+  if(state!=="game"||gameOver||levelComplete) return;
+
+  frame++;
+  let current=levels[level];
+
+  cube.velocity+=cube.gravity;
+  cube.y+=cube.velocity;
+
+  if(cube.y>=200){
+    cube.y=200;
+    cube.velocity=0;
+    cube.onGround=true;
+  }
+
+  if(frame%90===0) spawnObstacle();
+
+  obstacles.forEach(o=>{
+    o.x-=current.speed;
+    if(collision(cube,o)) gameOver=true;
+  });
+
+  if(frame>current.duration) levelComplete=true;
+}
+
+function drawButton(text,x,y,w,h,action){
+  ctx.fillStyle="#444";
+  ctx.fillRect(x,y,w,h);
+  ctx.fillStyle="white";
+  ctx.fillText(text,x+10,y+25);
+  buttons.push({x,y,w,h,action});
+}
+
+function drawBg(){
+  let g=ctx.createLinearGradient(0,0,0,300);
+  g.addColorStop(0,"#0f2027");
+  g.addColorStop(1,"#2c5364");
+  ctx.fillStyle=g;
+  ctx.fillRect(0,0,800,300);
+
+  ctx.fillStyle="rgba(255,255,255,0.5)";
+  bgParticles.forEach(p=>ctx.fillRect(p.x,p.y,p.size,p.size));
+}
+
+function draw(){
+  ctx.clearRect(0,0,800,300);
+  buttons=[];
+  drawBg();
+
+  if(state==="menu"){
+    ctx.fillStyle="white";
+    ctx.font="35px Arial";
+    ctx.fillText("MINI GD",300,70);
+
+    drawButton("JUGAR",300,110,200,40,()=>state="levels");
+    drawButton("CREAR NIVEL",300,160,200,40,()=>state="editor");
+    drawButton("SKINS",300,210,200,40,()=>state="skins");
+  }
+
+  else if(state==="levels"){
+    ctx.fillStyle="white";
+    ctx.font="30px Arial";
+    ctx.fillText("NIVELES",320,50);
+
+    levels.forEach((l,i)=>{
+      drawButton("Nivel "+(i+1),300,80+i*50,200,40,()=>{
+        startLevel(i);
+        state="game";
+      });
+    });
+
+    drawButton("VOLVER",10,10,120,30,()=>state="menu");
+  }
+
+  else if(state==="skins"){
+    ctx.fillStyle="white";
+    ctx.fillText("SKINS",330,50);
+
+    skins.forEach((s,i)=>{
+      drawButton("Skin "+(i+1),300,80+i*40,200,35,()=>selectedSkin=i);
+    });
+
+    drawButton("VOLVER",10,10,120,30,()=>state="menu");
+  }
+
+  else if(state==="game"){
+    ctx.fillStyle="white";
+    ctx.fillRect(0,230,800,5);
+
+    drawCube();
+
+    ctx.fillStyle="red";
+    obstacles.forEach(o=>ctx.fillRect(o.x,o.y,o.width,o.height));
+
+    ctx.fillStyle="white";
+    ctx.fillText("Nivel: "+(level+1),10,20);
+
+    if(gameOver) ctx.fillText("GAME OVER",300,150);
+    if(levelComplete) ctx.fillText("COMPLETADO",300,150);
+
+    drawButton("MENU",680,10,100,30,()=>state="menu");
+  }
+}
+
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+
+</body>
+</html>
